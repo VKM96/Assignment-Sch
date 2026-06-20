@@ -1,11 +1,22 @@
 import socket
 import logging
 import cmd
+import ssl
+import os
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_HOST_TCP_PORT = 65432
 DEFAULT_HOST_UDP_PORT = 65433
+DEFAULT_HOST_TLS_PORT = 65434
+
+# Ensure logs folder exists
+LOG_DIR = "logs"
 LOG_FILE = "client.log"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[logging.FileHandler(os.path.join(LOG_DIR, LOG_FILE)), logging.StreamHandler()])
 
 def tcp_create_socket(host, port):
     tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -22,6 +33,33 @@ def tcp_send(tcp_socket, message):
 def tcp_close(tcp_socket):
     tcp_socket.close()
     logging.info("TCP socket closed.")
+
+def tls_create_socket(host, port):
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile="server.crt")  # Load server certificate for verification
+    context.verify_mode = ssl.CERT_REQUIRED  # Require server certificate verification
+    try:
+        tcp_raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tls_socket= context.wrap_socket(tcp_raw_socket, server_hostname=host)
+        tls_socket.connect((host, port))
+        logging.info(f"Connected to TLS TCP server at {host}:{port}")
+        return tls_socket
+    except ssl.SSLError as e:
+        logging.error(f"TLS handshake failed with {host}:{port}: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Connection error with TLS TCP server at {host}:{port}: {e}")
+        return None
+
+def tls_send(tls_socket, message):
+    tls_socket.sendall(message.encode())
+    logging.info(f"Sent to TLS TCP server: {message}")
+    data = tls_socket.recv(1024)
+    logging.info(f"Received from TLS TCP server: {data.decode()}")
+
+def tls_close(tls_socket):
+    tls_socket.close()
+    logging.info("TLS socket closed.")
 
 
 def udp_send(host, port, message):
@@ -42,8 +80,10 @@ class ClientCLI(cmd.Cmd):
         self.host = DEFAULT_HOST
         self.tcp_port = DEFAULT_HOST_TCP_PORT
         self.udp_port = DEFAULT_HOST_UDP_PORT
+        self.tls_port = DEFAULT_HOST_TLS_PORT
         self.tcp_socket = None
         self.udp_socket = None
+        self.tls_socket = None
 
     def do_tcp_connect(self, arg):
         "Connect to TCP server: tcp_connect"
@@ -67,6 +107,28 @@ class ClientCLI(cmd.Cmd):
         else:
             logging.warning("Not connected to TCP server.")
 
+    def do_tls_connect(self, arg):
+        "Connect to TLS TCP server: tls_connect"
+        if self.tls_socket:
+            logging.warning("Already connected to TLS TCP server.")
+            return
+        self.tls_socket = tls_create_socket(self.host, self.tls_port)
+
+    def do_tls_send(self, arg):
+        "Send message to TLS TCP server: tls_send <message>"
+        if not self.tls_socket:
+            logging.warning("Not connected to TLS TCP server.")
+            return
+        tls_send(self.tls_socket, arg)
+
+    def do_tls_disconnect(self, arg):
+        "Disconnect from TLS TCP server: tls_disconnect"
+        if self.tls_socket:
+            tls_close(self.tls_socket)
+            self.tls_socket = None
+        else:
+            logging.warning("Not connected to TLS TCP server.")
+
     def do_udp_send(self, arg):
         "Send message to UDP server: udp_send <message>"
         if not arg:
@@ -83,6 +145,5 @@ class ClientCLI(cmd.Cmd):
         logging.info("Exiting client.")
         return True
 
-        
 if __name__ == "__main__":
     ClientCLI().cmdloop()
