@@ -4,10 +4,8 @@ import selectors
 import socket
 import logging
 import ssl
-from config  import server_config 
-
-# Here is how certificates were signed for TLS:
-# openssl req -new -x509 -days 365 -nodes -out server.crt -keyout server.key -config "openssl.cnf"
+import os
+from server_config import server_config 
 
 selector = selectors.DefaultSelector()
 
@@ -21,14 +19,15 @@ def tcp_server_start(host, port, max_connections):
     logging.info(f"TCP Server listening on {host}:{port}")
     return tcp_socket
 
-def tcp_server_tls_start(host, port, max_connections):
+def tcp_server_tls_start(host, port, max_connections, tls_cert_path, tls_key_path):
     tcp_socket_tls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp_socket_tls.bind((host, port))
     tcp_socket_tls.listen(max_connections)
     tcp_socket_tls.setblocking(False)
 
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain(certfile="server.crt", keyfile="server.key")
+    os.makedirs(server_config["cert_dir"], exist_ok=True)
+    context.load_cert_chain(certfile=tls_cert_path, keyfile=tls_key_path)
 
     # wrap the TCP socket with SSL context and register it with the selector
     selector.register(tcp_socket_tls, selectors.EVENT_READ, lambda sock: tcp_connection_handler_tls(sock, context))
@@ -85,14 +84,19 @@ def tcp_data_handler(client_socket):
 def tcp_udp_server(server_config):
 
     host = server_config["host"]
-    tcp_port = int(server_config["tcp_port"])  
+    tcp_port = int(server_config["tcp_port"])
+
     udp_port = int(server_config["udp_port"])
+
     tls_port = int(server_config["tls_port"])
+    tls_cert_path = os.path.join(server_config["cert_dir"], server_config["cert_file"])
+    tls_key_path = os.path.join(server_config["cert_dir"], server_config["key_file"])
+
     max_connections = int(server_config["max_connections"])
 
     tcp_server_start(host, tcp_port, max_connections)     # TCP Socket    
     udp_server_start(host, udp_port)     # UDP Socket
-    tcp_server_tls_start(host, tls_port, max_connections)  # TLS Socket
+    tcp_server_tls_start(host, tls_port, max_connections, tls_cert_path, tls_key_path)  # TLS Socket
 
     logging.info("Server is running. Waiting for connections..., Press Ctrl+C to stop the server.")
 

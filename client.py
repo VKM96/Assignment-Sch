@@ -3,20 +3,8 @@ import logging
 import cmd
 import ssl
 import os
+from client_config import client_config
 
-DEFAULT_HOST = "127.0.0.1"
-DEFAULT_HOST_TCP_PORT = 65432
-DEFAULT_HOST_UDP_PORT = 65433
-DEFAULT_HOST_TLS_PORT = 65434
-
-# Ensure logs folder exists
-LOG_DIR = "logs"
-LOG_FILE = "client.log"
-os.makedirs(LOG_DIR, exist_ok=True)
-
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[logging.FileHandler(os.path.join(LOG_DIR, LOG_FILE)), logging.StreamHandler()])
 
 def tcp_create_socket(host, port):
     tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -34,9 +22,9 @@ def tcp_close(tcp_socket):
     tcp_socket.close()
     logging.info("TCP socket closed.")
 
-def tls_create_socket(host, port):
+def tls_create_socket(host, port, cert_path):
     context = ssl.create_default_context()
-    context.load_verify_locations(cafile="server.crt")  # Load server certificate for verification
+    context.load_verify_locations(cafile=cert_path)  # Load server certificate for verification
     context.verify_mode = ssl.CERT_REQUIRED  # Require server certificate verification
     try:
         tcp_raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -77,13 +65,16 @@ class ClientCLI(cmd.Cmd):
 
     def __init__(self):
         super().__init__()
-        self.host = DEFAULT_HOST
-        self.tcp_port = DEFAULT_HOST_TCP_PORT
-        self.udp_port = DEFAULT_HOST_UDP_PORT
-        self.tls_port = DEFAULT_HOST_TLS_PORT
+        self.host = client_config["host"]
+        self.tcp_port = int(client_config["tcp_port"])
+        self.udp_port = int(client_config["udp_port"])
+        self.tls_port = int(client_config["tls_port"])
+        self.cert_path = os.path.join(client_config["cert_dir"], client_config["cert_file"])
+
         self.tcp_socket = None
         self.udp_socket = None
         self.tls_socket = None
+        os.makedirs(client_config["cert_dir"], exist_ok=True)
 
     def do_tcp_connect(self, arg):
         "Connect to TCP server: tcp_connect"
@@ -112,7 +103,7 @@ class ClientCLI(cmd.Cmd):
         if self.tls_socket:
             logging.warning("Already connected to TLS TCP server.")
             return
-        self.tls_socket = tls_create_socket(self.host, self.tls_port)
+        self.tls_socket = tls_create_socket(self.host, self.tls_port, self.cert_path)
 
     def do_tls_send(self, arg):
         "Send message to TLS TCP server: tls_send <message>"
