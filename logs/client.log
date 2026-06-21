@@ -1,0 +1,35 @@
+2026-06-21 18:38:08,434 - INFO - .env file loaded successfully.
+2026-06-21 18:38:14,657 - INFO - .env file loaded successfully.
+2026-06-21 18:39:12,717 - INFO - Client ID set to: 1
+2026-06-21 18:39:19,579 - INFO - Client ID set to: 2
+2026-06-21 18:39:23,404 - WARNING - No message provided to send.
+2026-06-21 18:39:26,735 - INFO - >> UDP >> dkfj
+2026-06-21 18:39:26,735 - INFO - << UDP >> dkfj
+2026-06-21 18:39:31,258 - INFO - >> UDP >> dkfj
+2026-06-21 18:39:31,258 - INFO - << UDP >> dkfj
+2026-06-21 18:39:39,492 - INFO - Connected to TCP server at 127.0.0.1:65432
+2026-06-21 18:39:43,520 - INFO - >> TCP >>dkfj
+2026-06-21 18:39:43,520 - INFO - << TCP <<dkfj
+2026-06-21 18:39:48,087 - WARNING - Not connected to TCP server.
+2026-06-21 18:39:50,472 - WARNING - Not connected to TCP server.
+2026-06-21 18:39:54,071 - INFO - Connected to TCP server at 127.0.0.1:65432
+2026-06-21 18:39:57,739 - INFO - >> TCP >>dfhjdhj
+2026-06-21 18:39:57,739 - INFO - << TCP <<dfhjdhj
+2026-06-21 18:40:01,969 - INFO - TCP socket closed.
+2026-06-21 18:40:06,021 - INFO - Connected to TLS TCP server at 127.0.0.1:65434
+2026-06-21 18:40:06,022 - INFO - >> TLS >>AUTH eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIyIiwiZXhwIjoxNzgyMDUxMDA2fQ.a32ogRZfySf0DBcmqx92UTEiC_2gAn6eTvdbvi20G1c
+2026-06-21 18:40:06,022 - INFO - << TLS <<OK: AUTH_SUCCESS
+2026-06-21 18:40:10,901 - INFO - >> TLS >>dfkj
+2026-06-21 18:40:10,902 - INFO - << TLS << dfkj
+2026-06-21 18:40:16,455 - INFO - Connected to TLS TCP server at 127.0.0.1:65434
+2026-06-21 18:40:16,455 - INFO - >> TLS >>AUTH eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIxIiwiZXhwIjoxNzgyMDUxMDE2fQ.Oll4Lpsa5heyCUZ1Em4EJrDmpWDl9BH-tE3q74MceQ4
+2026-06-21 18:40:16,456 - INFO - << TLS <<OK: AUTH_SUCCESS
+2026-06-21 18:40:19,992 - WARNING - No message provided to send.
+2026-06-21 18:40:24,019 - INFO - >> TLS >>dfdf
+2026-06-21 18:40:24,019 - INFO - << TLS << dfdf
+2026-06-21 18:40:28,272 - WARNING - Already connected to TLS TCP server.
+2026-06-21 18:40:32,929 - INFO - TLS socket closed.
+2026-06-21 18:40:37,205 - INFO - TCP socket closed.
+2026-06-21 18:40:37,205 - INFO - Exiting client.
+2026-06-21 18:40:40,400 - INFO - TLS socket closed.
+2026-06-21 18:40:40,400 - INFO - Exiting client.

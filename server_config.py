@@ -74,7 +74,7 @@ server_config = {
     "cert_file": os.getenv("ENV_CERT_FILE", DEFAULT_CERT_FILE),
     "key_file": os.getenv("ENV_KEY_FILE", DEFAULT_KEY_FILE),
     "log_dir": os.getenv("ENV_LOG_DIR", DEFAULT_LOG_DIR),
-    "log_file": os.getenv("ENV_LOG_FILE", DEFAULT_LOG_FILE),
+    "log_file": os.getenv("ENV_SERVER_LOG_FILE", DEFAULT_LOG_FILE),
     "jwt_secret": os.getenv("ENV_JWT_SECRET", DEFAULT_JWT_SECRET),
     "jwt_algorithm": os.getenv("ENV_JWT_ALGORITHM", DEFAULT_JWT_ALGORITHM),
     "jwt_expiration": os.getenv("ENV_JWT_EXPIRATION", DEFAULT_JWT_EXPIRATION),
