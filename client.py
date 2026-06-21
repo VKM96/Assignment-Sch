@@ -6,6 +6,7 @@ import os
 import jwt
 import time
 from client_config import client_config
+from client_config import CLIENT_VERSION
 
 DEFAULT_CLIENT_ID = "client0001"
 CLIENT_AUTH_TOKEN_PREFIX = "AUTH "
@@ -103,7 +104,7 @@ def udp_send(host, port, message):
     logging.info(f"{LOG_CLIENT_IN_UDP} {data.decode()}")
     udp_socket.close()
 class ClientCLI(cmd.Cmd):
-    intro = "Welcome to the TCP/UDP client. Type help to list commands.\n"
+    intro = f"Welcome to the TCP/UDP client v{CLIENT_VERSION}. Type help to list commands.\n"
     prompt = "client> "
 
     def __init__(self):

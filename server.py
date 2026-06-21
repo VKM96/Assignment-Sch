@@ -4,8 +4,10 @@ import logging
 import ssl
 import os
 import jwt
-from server_config import server_config 
 from enum import Enum
+from server_config import server_config 
+from server_config import SERVER_VERSION
+
 
 CLIENT_AUTH_TOKEN_PREFIX = "AUTH "
 SERVER_AUTH_OK_RESPONSE = "OK: AUTH_SUCCESS"
@@ -161,7 +163,7 @@ def common_data_handler(proto: Protocol, client_socket, data, address):
     data: bytes received
     addr: (ip, port) tuple
     """
-
+    #todo Rate-limit check should go here
     Is_valid_data, validated_data, reason = validate_payload(data, int(server_config["max_payload"]))
 
     if not Is_valid_data:
@@ -202,7 +204,7 @@ def tcp_udp_server(server_config):
     udp_server_start(host, udp_port)     # UDP Socket
     tls_server_start(host, tls_port, max_connections, tls_cert_path, tls_key_path)  # TLS Socket
 
-    logging.info("Server is running. Waiting for connections..., Press Ctrl+C to stop the server.")
+    logging.info(f"Starting Server v{SERVER_VERSION}, waiting for connections. Press CTRL+C to stop")
 
     try:
         while True:

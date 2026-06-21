@@ -2,6 +2,8 @@ import os
 import logging
 from dotenv import load_dotenv
 
+SERVER_VERSION = "1.0.0"
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_HOST_TCP_PORT = 65432
 DEFAULT_HOST_UDP_PORT = 65433
