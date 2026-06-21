@@ -13,6 +13,10 @@ DEFAULT_CERT_FILE = "server.crt"
 DEFAULT_LOG_DIR = "logs"
 DEFAULT_LOG_FILE = "client.log"
 
+DEFAULT_JWT_SECRET = "JWT_SECRET_KEY_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+DEFAULT_JWT_ALGORITHM = "HS256"
+DEFAULT_JWT_EXPIRATION = 3600  # 1 hour
+
 # Load environment variables from .env file
 env_loaded = load_dotenv()
 
@@ -24,7 +28,10 @@ client_config = {
     "cert_dir": os.getenv("ENV_CERT_DIR", DEFAULT_CERT_DIR),
     "cert_file": os.getenv("ENV_CERT_FILE", DEFAULT_CERT_FILE),
     "log_dir": os.getenv("ENV_LOG_DIR", DEFAULT_LOG_DIR),
-    "log_file": os.getenv("ENV_LOG_FILE", DEFAULT_LOG_FILE)
+    "log_file": os.getenv("ENV_LOG_FILE", DEFAULT_LOG_FILE),
+    "jwt_secret": os.getenv("ENV_JWT_SECRET", DEFAULT_JWT_SECRET),
+    "jwt_algorithm": os.getenv("ENV_JWT_ALGORITHM", DEFAULT_JWT_ALGORITHM),
+    "jwt_expiration": int(os.getenv("ENV_JWT_EXPIRATION", DEFAULT_JWT_EXPIRATION))
 }
 
 os.makedirs(client_config["log_dir"], exist_ok=True)
