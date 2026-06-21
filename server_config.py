@@ -19,6 +19,8 @@ DEFAULT_JWT_SECRET = "JWT_SECRET_KEY_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 DEFAULT_JWT_ALGORITHM = "HS256"
 DEFAULT_JWT_EXPIRATION = 3600  # 1 hour
 
+DEFAULT_MAX_PAYLOAD = 4096 # 4KB size limit
+
 # Load environment variables from .env file
 env_loaded = load_dotenv()
 
@@ -35,7 +37,8 @@ server_config = {
     "log_file": os.getenv("ENV_LOG_FILE", DEFAULT_LOG_FILE),
     "jwt_secret": os.getenv("ENV_JWT_SECRET", DEFAULT_JWT_SECRET),
     "jwt_algorithm": os.getenv("ENV_JWT_ALGORITHM", DEFAULT_JWT_ALGORITHM),
-    "jwt_expiration": os.getenv("ENV_JWT_EXPIRATION", DEFAULT_JWT_EXPIRATION)
+    "jwt_expiration": os.getenv("ENV_JWT_EXPIRATION", DEFAULT_JWT_EXPIRATION),
+    "max_payload" : os.getenv("ENV_MAX_PAYLOAD", DEFAULT_MAX_PAYLOAD)
 }
 
 os.makedirs(server_config["log_dir"], exist_ok=True)

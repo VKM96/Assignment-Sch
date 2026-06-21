@@ -139,6 +139,9 @@ class ClientCLI(cmd.Cmd):
         if not self.tcp_socket:
             logging.warning("Not connected to TCP server.")
             return
+        if not arg.strip():
+            logging.warning("No message provided to send.")
+            return
         tcp_send(self.tcp_socket, arg)
 
     def do_tcp_disconnect(self, arg):
@@ -160,6 +163,9 @@ class ClientCLI(cmd.Cmd):
         "Send message to TLS TCP server: tls_send <message>"
         if not self.tls_socket:
             logging.warning("Not connected to TLS TCP server.")
+            return
+        if not arg.strip():
+            logging.warning("No message provided to send.")
             return
         tls_send(self.tls_socket, arg)
 
