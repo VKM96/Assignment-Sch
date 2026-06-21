@@ -3,7 +3,7 @@
 REM Launch client.py using the venv Python
 
 REM Ensure we’re in project root
-cd /d %~dp0
+cd /d %~dp0\..
 
 REM Path to venv Python
 set PYTHON=.venv\Scripts\python.exe
