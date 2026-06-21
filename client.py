@@ -82,7 +82,9 @@ def tls_create_socket(host, port, cert_path, client_id):
         logging.error(f"Connection error with TLS TCP server at {host}:{port}: {e}")
         return None
 
+
 def tls_send(tls_socket, message):
+    #todo: try catch block for graceful termination in case the server closes
     tls_socket.sendall(message.encode())
     logging.info(f"{LOG_CLIENT_OUT_TLS}{message}")
     data = tls_socket.recv(1024)

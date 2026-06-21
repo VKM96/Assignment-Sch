@@ -1,5 +1,3 @@
-from logging import config
-from multiprocessing import context
 import selectors
 import socket
 import logging
@@ -11,7 +9,9 @@ from enum import Enum
 
 CLIENT_AUTH_TOKEN_PREFIX = "AUTH "
 SERVER_AUTH_OK_RESPONSE = "OK: AUTH_SUCCESS"
-SERVER_PAYLOAD_BUF_SIZE = 4096
+SERVER_ERROR_RESPONSE = "SERVER: ERROR"
+
+SERVER_NW_BUF_SIZE = 65535
 
 class Protocol(Enum):
     TCP = "TCP"
@@ -36,6 +36,33 @@ def verify_jwt_token(token: str, jwt_secret, jwt_algorithm) -> tuple[bool, str |
     except jwt.InvalidTokenError:
         logging.error("Invalid JWT token.")
         return False, None
+    
+def validate_payload(data: bytes, max_size: int) -> tuple[bool, str | None, str | None]:
+    # Reject oversized payloads
+    if len(data) > max_size:
+        reason = (f"Payload too large ({len(data)} bytes)")
+        return False, None, reason
+
+    try:
+        validated_data = data.decode("utf-8")
+    except UnicodeDecodeError:
+        reason = (f"Malformed/binary payload rejected")
+        return False, None, reason
+
+    return True, validated_data, None
+
+def socket_close(client_socket, proto: Protocol, address = "unknown"):
+    """Safely close sockets without crashing"""
+    try:
+        selector.unregister(client_socket)
+    except Exception:
+        pass
+    try:
+        client_socket.close()
+    except Exception:
+        pass
+    logging.info(f"Closed {proto.value} connection with {address}")
+
 
 def tcp_server_start(host, port, max_connections):
     tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -51,7 +78,7 @@ def tcp_connection_handler(tcp_socket):
     connection, address = tcp_socket.accept()
     connection.setblocking(False)
 
-    selector.register(connection, selectors.EVENT_READ, lambda sock: stream_data_handler(sock, Protocol.TCP))
+    selector.register(connection, selectors.EVENT_READ, lambda sock: stream_data_handler(sock, Protocol.TCP, address))
     logging.info(f"TCP Connection from {address}")
 
 def tls_server_start(host, port, max_connections, tls_cert_path, tls_key_path):
@@ -80,25 +107,25 @@ def tls_connection_handler(tcp_socket, context):
 
         if not auth_message.startswith(CLIENT_AUTH_TOKEN_PREFIX):
             logging.error(f"Authentication failed with {address}: No AUTH message received")
-            connection.close()
+            socket_close(connection, Protocol.TLS, address)
             return
 
         token = auth_message[len(CLIENT_AUTH_TOKEN_PREFIX):].strip()
         is_success, client_id = verify_jwt_token(token, server_config["jwt_secret"], server_config["jwt_algorithm"])
         if not is_success:
             logging.error(f"Authentication failed with {address}: Invalid JWT token")
-            connection.close()
+            socket_close(connection, Protocol.TLS, address)
             return
         logging.info(f"TLS client {client_id} authenticated from {address}")
         
         logging.info(f"TLS>> {SERVER_AUTH_OK_RESPONSE}")
         connection.sendall(SERVER_AUTH_OK_RESPONSE.encode())
         connection.setblocking(False)
-        selector.register(connection, selectors.EVENT_READ, lambda sock: stream_data_handler(sock, Protocol.TLS))
+        selector.register(connection, selectors.EVENT_READ, lambda sock: stream_data_handler(sock, Protocol.TLS, address))
 
     except ssl.SSLError as e:
         logging.error(f"TLS handshake failed with {address}: {e}")
-        connection.close()
+        socket_close(connection, Protocol.TLS, address)
 
 def udp_server_start(host, port):
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -109,22 +136,23 @@ def udp_server_start(host, port):
     return udp_socket
 
 def udp_connection_handler(udp_socket):
-    data, address = udp_socket.recvfrom(SERVER_PAYLOAD_BUF_SIZE)
-    common_data_handler(Protocol.UDP, udp_socket, data, address)
-
-def stream_data_handler(client_socket, proto: Protocol):
     try:
-        data = client_socket.recv(SERVER_PAYLOAD_BUF_SIZE)
+        data, address = udp_socket.recvfrom(SERVER_NW_BUF_SIZE)
+        common_data_handler(Protocol.UDP, udp_socket, data, address)
+    except Exception as e:
+        socket_close(udp_socket, Protocol.UDP, "<unknown>")
+
+def stream_data_handler(client_socket, proto: Protocol, address):
+    try:
+        data = client_socket.recv(SERVER_NW_BUF_SIZE)
         if data:
-            common_data_handler(proto, client_socket, data, address = client_socket.getpeername())
+            common_data_handler(proto, client_socket, data, address)
         else:
-            logging.info(f"!{client_socket.getpeername()} disconnected")
-            selector.unregister(client_socket)
-            client_socket.close()
-    except:
-        logging.error(f"Error with {client_socket.getpeername()}, closing socket")
-        selector.unregister(client_socket)
-        client_socket.close()
+            logging.info(f"!{address} disconnected")
+            socket_close(client_socket, proto, address)
+    except Exception as e:
+        logging.error(f"{proto.value} error with {address}: {e}")
+        socket_close(client_socket, proto, address)
 
 def common_data_handler(proto: Protocol, client_socket, data, address):
     """
@@ -133,13 +161,30 @@ def common_data_handler(proto: Protocol, client_socket, data, address):
     data: bytes received
     addr: (ip, port) tuple
     """
-    logging.info(f"<< {proto.value} << {address}: {data.decode()}")
+
+    Is_valid_data, validated_data, reason = validate_payload(data, int(server_config["max_payload"]))
+
+    if not Is_valid_data:
+        logging.warning(f"{proto.value} : {address} : {reason}")
+
+        if proto == Protocol.UDP:
+            return
+        else:
+            try:
+                client_socket.sendall(f"{SERVER_ERROR_RESPONSE}: {reason}\n".encode())
+            except Exception:
+                pass
+            socket_close(client_socket, proto, address)
+        return
+
+    logging.info(f"<< {proto.value} << {address}: {validated_data}")
 
     if proto == Protocol.UDP:
         client_socket.sendto(data, address)
     else:
         client_socket.sendall(data)
-    logging.info(f">> {proto.value} >> {address}: {data.decode()}")
+
+    logging.info(f">> {proto.value} >> {address}: {validated_data}")
 
 
 def tcp_udp_server(server_config):
@@ -152,7 +197,6 @@ def tcp_udp_server(server_config):
     tls_key_path = os.path.join(server_config["cert_dir"], server_config["key_file"])
 
     max_connections = int(server_config["max_connections"])
-    max_payload_size = int(server_config["max_payload"])
 
     tcp_server_start(host, tcp_port, max_connections)     # TCP Socket    
     udp_server_start(host, udp_port)     # UDP Socket
