@@ -1,3 +1,34 @@
+"""
+client.py - TCP/UDP Echo Server
+
+This module implements a cli based client for testing udp, tcp and tls
+
+Key features:
+- TCP client functions (connect send close)
+- UDP client function (send)
+- TLS client functions (connect with JWT auth, send, close)
+- Settable client-ID via CLI from which tokens are derived 
+- ClientCLI class for interactive testing
+
+Usage:
+- >>> python client.py
+- Use commands supported by the CLI after  
+- run_client.bat can also be used    
+
+Dependencies:
+- client_config.py for default settings.
+- SSL certificates for TLS support.
+
+TODO:
+- Robustness improvements 
+
+"""
+"""
+------------------------------------------------------------
+IMPORTS
+------------------------------------------------------------
+"""
+
 import socket
 import logging
 import cmd
@@ -7,6 +38,12 @@ import jwt
 import time
 from client_config import client_config
 from client_config import CLIENT_VERSION
+
+"""
+------------------------------------------------------------
+GLOBAL HELPERS
+------------------------------------------------------------
+"""
 
 DEFAULT_CLIENT_ID = "client0001"
 CLIENT_AUTH_TOKEN_PREFIX = "AUTH "
@@ -19,10 +56,22 @@ LOG_CLIENT_IN_TCP = "<< TCP <<"
 LOG_CLIENT_OUT_TLS = ">> TLS >>"
 LOG_CLIENT_IN_TLS = "<< TLS <<"
 
+"""
+------------------------------------------------------------
+HELPER FUNCTIONS
+------------------------------------------------------------
+"""
 
 def generate_jwt_token(client_id: str) -> str:
-    "Generate a JWT token for the given client ID." 
+    """
+    Generate a JWT token for the given client ID.
 
+    Args:
+        client_id (str): Unique identifier for the client.
+
+    Returns:
+        str: Encoded JWT token.
+    """
     jwt_secret = client_config["jwt_secret"]
     jwt_algorithm = client_config["jwt_algorithm"]
     jwt_expiration = int(client_config["jwt_expiration"])
@@ -33,23 +82,70 @@ def generate_jwt_token(client_id: str) -> str:
     }
     return jwt.encode(payload, jwt_secret, algorithm=jwt_algorithm)
 
+"""
+------------------------------------------------------------
+TCP
+------------------------------------------------------------
+"""
+
 def tcp_create_socket(host, port):
+    """
+    Create and connect a TCP client socket.
+
+    Args:
+        host (str): Server hostname or IP.
+        port (int): TCP port to connect.
+
+    Returns:
+        socket: Connected TCP socket.
+    """
     tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp_socket.connect((host, port))
     logging.info(f"Connected to TCP server at {host}:{port}")
     return tcp_socket
 
 def tcp_send(tcp_socket, message):
+    """
+    Send a message over TCP and log the echoed response.
+
+    Args:
+        tcp_socket: Connected TCP socket.
+        message (str): Message to send.
+    """
     tcp_socket.sendall(message.encode())
     logging.info(f"{LOG_CLIENT_OUT_TCP}{message}")
     data = tcp_socket.recv(1024)
     logging.info(f"{LOG_CLIENT_IN_TCP}{data.decode()}")
 
 def tcp_close(tcp_socket):
+    """
+    Close the TCP socket connection.
+
+    Args:
+        tcp_socket: Connected TCP socket.
+    """
     tcp_socket.close()
     logging.info("TCP socket closed.")
 
+"""
+------------------------------------------------------------
+TLS
+------------------------------------------------------------
+"""
+
 def tls_create_socket(host, port, cert_path, client_id):
+    """
+    Establish a TLS-secured client connection and authenticate.
+
+    Args:
+        host (str): Server hostname.
+        port (int): TLS port to connect.
+        cert_path (str): Path to server certificate (for verification).
+        client_id (str): Client identifier used to generate JWT.
+
+    Returns:
+        socket | None: Authenticated TLS socket, or None on failure.
+    """
     context = ssl.create_default_context()
     context.load_verify_locations(cafile=cert_path)  # Load server certificate for verification
     context.verify_mode = ssl.CERT_REQUIRED  # Require server certificate verification
@@ -85,6 +181,13 @@ def tls_create_socket(host, port, cert_path, client_id):
 
 
 def tls_send(tls_socket, message):
+    """
+    Send a message over an established TLS connection and log the response.
+
+    Args:
+        tls_socket: Authenticated TLS socket.
+        message (str): Message to send to server.
+    """
     #todo: try catch block for graceful termination in case the server closes
     tls_socket.sendall(message.encode())
     logging.info(f"{LOG_CLIENT_OUT_TLS}{message}")
@@ -92,18 +195,66 @@ def tls_send(tls_socket, message):
     logging.info(f"{LOG_CLIENT_IN_TLS} {data.decode()}")
 
 def tls_close(tls_socket):
+    """
+    Close an established TLS socket connection.
+
+    Args:
+        tls_socket: Authenticated TLS socket to be closed.
+    """
     tls_socket.close()
     logging.info("TLS socket closed.")
 
+"""
+------------------------------------------------------------
+UDP
+------------------------------------------------------------
+"""
 
 def udp_send(host, port, message):
+    """
+    Send a UDP datagram to the server and log the echoed response.
+
+    Args:
+        host (str): Server hostname or IP.
+        port (int): UDP port to send to.
+        message (str): Message to send.
+    """
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.sendto(message.encode(), (host, port))
     logging.info(f"{LOG_CLIENT_OUT_UDP}{message}")
     data, _ = udp_socket.recvfrom(1024)
     logging.info(f"{LOG_CLIENT_IN_UDP} {data.decode()}")
     udp_socket.close()
+
+"""
+------------------------------------------------------------
+CORE IMPLEMENTATION
+------------------------------------------------------------
+"""
 class ClientCLI(cmd.Cmd):
+    """
+    Interactive command-line interface for TCP, UDP, and TLS clients.
+
+    Features:
+        • Connect, send, and disconnect from TCP servers
+        • Connect, authenticate, send, and disconnect from TLS servers
+        • Send datagrams to UDP servers
+        • Manage client ID for JWT authentication
+        • Display client configuration info
+        • Graceful shutdown with resource cleanup
+
+    Commands:
+        set_client_id <id>     - Set client identifier
+        tcp_connect            - Connect to TCP server
+        tcp_send <message>     - Send message to TCP server
+        tcp_disconnect         - Disconnect from TCP server
+        tls_connect            - Connect to TLS server (with JWT auth)
+        tls_send <message>     - Send message to TLS server
+        tls_disconnect         - Disconnect from TLS server
+        udp_send <message>     - Send message to UDP server
+        client_info            - Show client configuration
+        quit                   - Exit client
+    """
     intro = f"Welcome to the TCP/UDP client v{CLIENT_VERSION}. Type help to list commands.\n"
     prompt = "client> "
 

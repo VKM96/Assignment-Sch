@@ -1,6 +1,38 @@
+"""
+client_config.py - configuration parameters for client
+
+This module implements handles all the configurable params for client.py
+
+Key components:
+- env variables are parsed though dotenv 
+- All env variables also have a default fallback 
+
+
+Usage:
+- Import this module in client.py 
+
+Dependencies:
+- .env file 
+
+TODO:
+
+"""
+
+"""
+------------------------------------------------------------
+IMPORTS
+------------------------------------------------------------
+"""
+
 import os
 import logging
 from dotenv import load_dotenv
+
+"""
+------------------------------------------------------------
+DEFAULTS
+------------------------------------------------------------
+"""
 
 CLIENT_VERSION = "1.0.0"
 
@@ -18,6 +50,12 @@ DEFAULT_LOG_FILE = "client.log"
 DEFAULT_JWT_SECRET = "JWT_SECRET_KEY_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 DEFAULT_JWT_ALGORITHM = "HS256"
 DEFAULT_JWT_EXPIRATION = 3600  # 1 hour
+
+"""
+------------------------------------------------------------
+CONFIGURATION SETUP
+------------------------------------------------------------
+"""
 
 # Load environment variables from .env file
 env_loaded = load_dotenv()
