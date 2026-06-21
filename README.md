@@ -32,7 +32,7 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 1. client is built as a cli application supporting udp, tcp and tcp_tls operations
 2. The connect, send and receive do not have any error handling, recovery mechanisms currently. This needs to be implemented
 3. logs are implemented through inbuilt logging module, sensitive data protection needs to be implemented
-4. Environment variables are taken from same .env as server for demonstration. This needs to be separated
+4. Environment variables are taken from same .env as server for demonstration. This needs to be separated since all client log to the same file now. This is known issue
 5. tcp_tls ensures tls handshake is complete, and the auth token validated right at the point of connection.
 6. Auth token is derived based on client_id unique to the client (settable) and .env based JWT_secret and JWT_algorithm
 7. tcp and udp connections do not have any auth mechanism. plain tcp needs to be removed, auth needs to be incorporated into udp as well 
