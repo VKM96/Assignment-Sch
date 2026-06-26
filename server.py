@@ -32,11 +32,12 @@ IMPORTS
 ------------------------------------------------------------
 """
 
+import os
 import selectors
 import socket
 import ssl
-import os
 from enum import Enum
+from functools import partial
 from server_config import server_config 
 from server_config import SERVER_VERSION
 from server_rate_limiter import RateLimiter, FixedWindowCounter
@@ -56,6 +57,7 @@ CLIENT_AUTH_TOKEN_PREFIX = "AUTH "      # Prefix for client Auth messages
 SERVER_AUTH_OK_RESPONSE = "OK: AUTH_SUCCESS" # Server Auth response 
 SERVER_ERROR_RESPONSE = "SERVER: ERROR" # Server error response 
 SERVER_NW_BUF_SIZE = 65535 # Server network buffer size 
+TLS_HANDSHAKE_TIMEOUT_SECONDS = 5
 
 
 class Protocol(Enum):
@@ -161,7 +163,7 @@ class EchoServer:
         self.selector.register(
             tcp_socket,
             selectors.EVENT_READ,
-            lambda sock: self._handle_tcp_accept(sock),
+            partial(self._handle_tcp_accept),
         )
         logger.info(f"TCP Server listening on {host}:{port}")
         return tcp_socket
@@ -173,7 +175,7 @@ class EchoServer:
         self.selector.register(
             connection,
             selectors.EVENT_READ,
-            lambda sock: self._handle_stream_data(sock, Protocol.TCP, address),
+            partial(self._handle_stream_data, proto=Protocol.TCP, address=address),
         )
         logger.info(f"TCP Connection from {address}")
 
@@ -187,7 +189,7 @@ class EchoServer:
         self.selector.register(
             udp_socket,
             selectors.EVENT_READ,
-            lambda sock: self._handle_udp_data(sock),
+            partial(self._handle_udp_data),
         )
         logger.info(f"UDP Server listening on {host}:{port}")
         return udp_socket
@@ -216,7 +218,7 @@ class EchoServer:
         self.selector.register(
             tls_socket,
             selectors.EVENT_READ,
-            lambda sock: self._handle_tls_accept(sock, context),
+            partial(self._handle_tls_accept, context=context),
         )
         logger.info(f"TLS Server listening on {host}:{port}")
         return tls_socket
@@ -225,13 +227,21 @@ class EchoServer:
         """Accept a TLS connection, authenticate it, and register it for data handling."""
         connection, address = listening_socket.accept()
         try:
+            connection.settimeout(TLS_HANDSHAKE_TIMEOUT_SECONDS)
             connection = context.wrap_socket(connection, server_side=True)
+            connection.settimeout(TLS_HANDSHAKE_TIMEOUT_SECONDS)
             logger.info(f"TLS Connection from {address}")
 
-            auth_message = connection.recv(512).decode().strip()
+            try:
+                auth_message = connection.recv(512).decode("utf-8").strip()
+            except (socket.timeout, ConnectionResetError, ssl.SSLError, UnicodeDecodeError) as exc:
+                logger.warning(f"TLS auth read failed with {address}: {exc}")
+                self._close_socket(connection, Protocol.TLS, address)
+                return
+
             logger.info(f"TLS<< {auth_message}")
 
-            if not auth_message.startswith(CLIENT_AUTH_TOKEN_PREFIX):
+            if not auth_message or not auth_message.startswith(CLIENT_AUTH_TOKEN_PREFIX):
                 logger.error(f"Authentication failed with {address}: No AUTH message received")
                 self._close_socket(connection, Protocol.TLS, address)
                 return
@@ -250,10 +260,13 @@ class EchoServer:
             self.selector.register(
                 connection,
                 selectors.EVENT_READ,
-                lambda sock: self._handle_stream_data(sock, Protocol.TLS, address),
+                partial(self._handle_stream_data, proto=Protocol.TLS, address=address),
             )
         except ssl.SSLError as exc:
             logger.error(f"TLS handshake failed with {address}: {exc}")
+            self._close_socket(connection, Protocol.TLS, address)
+        except (ConnectionResetError, BrokenPipeError, OSError) as exc:
+            logger.warning(f"TLS connection interrupted with {address}: {exc}")
             self._close_socket(connection, Protocol.TLS, address)
         except Exception as exc:
             logger.error(f"TLS connection error with {address}: {exc}")
@@ -302,12 +315,6 @@ class EchoServer:
                 pass
         self.selector.close()
         logger.info("All sockets closed.")
-
-
-
-
-
-
 
 if __name__ == "__main__":
     configure_logging(server_config)
