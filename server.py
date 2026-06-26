@@ -34,7 +34,6 @@ IMPORTS
 
 import selectors
 import socket
-import logging
 import ssl
 import os
 from enum import Enum
@@ -43,6 +42,9 @@ from server_config import SERVER_VERSION
 from server_rate_limiter import RateLimiter, FixedWindowCounter
 from server_payload_validator import validate_payload
 from server_authenticator import AuthenticatorService, JWTAuthenticator
+from server_logging import configure_logging, get_logger
+
+logger = get_logger(__name__)
 
 """
 ------------------------------------------------------------
@@ -107,7 +109,7 @@ def socket_close(client_socket, proto: Protocol, address = "unknown"):
         client_socket.close()
     except Exception:
         pass
-    logging.info(f"Closed {proto.value} connection with {address}")
+    logger.info(f"Closed {proto.value} connection with {address}")
 
 
 def stream_data_handler(client_socket, proto: Protocol, address):
@@ -125,10 +127,10 @@ def stream_data_handler(client_socket, proto: Protocol, address):
         if data:
             common_data_handler(proto, client_socket, data, address)
         else:
-            logging.info(f"!{address} disconnected")
+            logger.info(f"!{address} disconnected")
             socket_close(client_socket, proto, address)
     except Exception as e:
-        logging.error(f"{proto.value} error with {address}: {e}")
+        logger.error(f"{proto.value} error with {address}: {e}")
         socket_close(client_socket, proto, address)
 
 def common_data_handler(proto: Protocol, client_socket, data, address):
@@ -146,7 +148,7 @@ def common_data_handler(proto: Protocol, client_socket, data, address):
     
     # Rate limit check (before payload validation for efficiency)
     if not rate_limiter.is_allowed(client_key):
-        logging.warning(f"{proto.value} : {address} : Rate limit exceeded (max {server_config['rate_limit_max_messages']} messages per {server_config['rate_limit_window_seconds']} seconds)")
+        logger.warning(f"{proto.value} : {address} : Rate limit exceeded (max {server_config['rate_limit_max_messages']} messages per {server_config['rate_limit_window_seconds']} seconds)")
         
         if proto == Protocol.UDP:
             return
@@ -161,7 +163,7 @@ def common_data_handler(proto: Protocol, client_socket, data, address):
     Is_valid_data, validated_data, reason = validate_payload(data, int(server_config["max_payload"]))
 
     if not Is_valid_data:
-        logging.warning(f"{proto.value} : {address} : {reason}")
+        logger.warning(f"{proto.value} : {address} : {reason}")
 
         if proto == Protocol.UDP:
             return
@@ -173,17 +175,17 @@ def common_data_handler(proto: Protocol, client_socket, data, address):
             socket_close(client_socket, proto, address)
         return
 
-    logging.info(f"<< {proto.value} << {address}: {validated_data}")
+    logger.info(f"<< {proto.value} << {address}: {validated_data}")
 
     if proto == Protocol.UDP:
         client_socket.sendto(data, address)
     else:
         client_socket.sendall(data)
 
-    logging.info(f">> {proto.value} >> {address}: {validated_data}")
 
 """
 ------------------------------------------------------------
+
 TCP
 ------------------------------------------------------------
 """
@@ -206,7 +208,7 @@ def tcp_server_start(host, port, max_connections):
     tcp_socket.setblocking(False)
 
     selector.register(tcp_socket, selectors.EVENT_READ, tcp_connection_handler)
-    logging.info(f"TCP Server listening on {host}:{port}")
+    logger.info(f"TCP Server listening on {host}:{port}")
     return tcp_socket
 
 def tcp_connection_handler(tcp_socket):
@@ -220,7 +222,7 @@ def tcp_connection_handler(tcp_socket):
     connection.setblocking(False)
 
     selector.register(connection, selectors.EVENT_READ, lambda sock: stream_data_handler(sock, Protocol.TCP, address))
-    logging.info(f"TCP Connection from {address}")
+    logger.info(f"TCP Connection from {address}")
 
 """
 ------------------------------------------------------------
@@ -254,7 +256,7 @@ def tls_server_start(host, port, max_connections, tls_cert_path, tls_key_path):
 
     # wrap the TCP socket with SSL context and register it with the selector
     selector.register(tls_socket, selectors.EVENT_READ, lambda sock: tls_connection_handler(sock, context))
-    logging.info(f"TLS Server listening on {host}:{port}")
+    logger.info(f"TLS Server listening on {host}:{port}")
     return tls_socket
 
 def tls_connection_handler(tcp_socket, context):
@@ -269,33 +271,33 @@ def tls_connection_handler(tcp_socket, context):
     try:
         # Perform TLS handshake
         connection = context.wrap_socket(connection, server_side=True)
-        logging.info(f"TLS Connection from {address}")
+        logger.info(f"TLS Connection from {address}")
 
         # Perform authentication by expecting an "AUTH <token>" message from the client
         auth_message = connection.recv(512).decode().strip()
-        logging.info(f"TLS<< {auth_message}")
+        logger.info(f"TLS<< {auth_message}")
 
         if not auth_message.startswith(CLIENT_AUTH_TOKEN_PREFIX):
-            logging.error(f"Authentication failed with {address}: No AUTH message received")
+            logger.error(f"Authentication failed with {address}: No AUTH message received")
             socket_close(connection, Protocol.TLS, address)
             return
 
         token = auth_message[len(CLIENT_AUTH_TOKEN_PREFIX):].strip()
         is_success, client_id = authenticator.authenticate(token)
         if not is_success:
-            logging.error(f"Authentication failed with {address}: Invalid JWT token")
+            logger.error(f"Authentication failed with {address}: Invalid JWT token")
             socket_close(connection, Protocol.TLS, address)
             return
-        logging.info(f"TLS client {client_id} authenticated from {address}")
+        logger.info(f"TLS client {client_id} authenticated from {address}")
         
         # Send success response and register for data handling
-        logging.info(f"TLS>> {SERVER_AUTH_OK_RESPONSE}")
+        logger.info(f"TLS>> {SERVER_AUTH_OK_RESPONSE}")
         connection.sendall(SERVER_AUTH_OK_RESPONSE.encode())
         connection.setblocking(False)
         selector.register(connection, selectors.EVENT_READ, lambda sock: stream_data_handler(sock, Protocol.TLS, address))
 
     except ssl.SSLError as e:
-        logging.error(f"TLS handshake failed with {address}: {e}")
+        logger.error(f"TLS handshake failed with {address}: {e}")
         socket_close(connection, Protocol.TLS, address)
 
 """
@@ -319,7 +321,7 @@ def udp_server_start(host, port):
     udp_socket.bind((host, port))
     udp_socket.setblocking(False)
     selector.register(udp_socket, selectors.EVENT_READ, udp_connection_handler)
-    logging.info(f"UDP Server listening on {host}:{port}")
+    logger.info(f"UDP Server listening on {host}:{port}")
     return udp_socket
 
 def udp_connection_handler(udp_socket):
@@ -364,7 +366,7 @@ def tcp_udp_server(server_config):
     udp_server_start(host, udp_port)     # UDP Socket
     tls_server_start(host, tls_port, max_connections, tls_cert_path, tls_key_path)  # TLS Socket
 
-    logging.info(f"Starting Server v{SERVER_VERSION}, waiting for connections. Press CTRL+C to stop")
+    logger.info(f"Starting Server v{SERVER_VERSION}, waiting for connections. Press CTRL+C to stop")
 
     try:
         # Main event loop: wait for socket events and dispatch handlers
@@ -375,11 +377,12 @@ def tcp_udp_server(server_config):
                 callback(key.fileobj)   
     except KeyboardInterrupt:
         #TODO Better shutdown mechanism to be devised
-        logging.info("Exit Signal received. Server is shutting down.")
+        logger.info("Exit Signal received. Server is shutting down.")
     finally:
         # Cleanup selector and sockets
         selector.close()
-        logging.info("All sockets closed.")
+        logger.info("All sockets closed.")
 
 if __name__ == "__main__":
+    configure_logging(server_config)
     tcp_udp_server(server_config)

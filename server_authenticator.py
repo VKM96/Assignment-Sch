@@ -17,8 +17,10 @@ Usage:
     success, client_id = authenticator.authenticate(token)
 """
 
-import logging
+from server_logging import get_logger
 import jwt
+
+logger = get_logger(__name__)
 
 
 class Authenticator:
@@ -43,10 +45,10 @@ class JWTAuthenticator(Authenticator):
             client_id = decoded_token.get("client_id", "unknown")
             return True, client_id
         except jwt.ExpiredSignatureError:
-            logging.error("JWT token has expired.")
+            logger.error("JWT token has expired.")
             return False, None
         except jwt.InvalidTokenError:
-            logging.error("Invalid JWT token.")
+            logger.error("Invalid JWT token.")
             return False, None
 
 

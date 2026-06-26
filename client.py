@@ -48,6 +48,7 @@ GLOBAL HELPERS
 DEFAULT_CLIENT_ID = "client0001"
 CLIENT_AUTH_TOKEN_PREFIX = "AUTH "
 SERVER_AUTH_OK_RESPONSE = "OK: AUTH_SUCCESS"
+CLIENT_TIMEOUT = 5
 
 LOG_CLIENT_OUT_UDP = ">> UDP >> "
 LOG_CLIENT_IN_UDP = "<< UDP >>"
@@ -55,6 +56,7 @@ LOG_CLIENT_OUT_TCP = ">> TCP >>"
 LOG_CLIENT_IN_TCP = "<< TCP <<"
 LOG_CLIENT_OUT_TLS = ">> TLS >>"
 LOG_CLIENT_IN_TLS = "<< TLS <<"
+
 
 """
 ------------------------------------------------------------
@@ -212,7 +214,7 @@ UDP
 
 def udp_send(host, port, message):
     """
-    Send a UDP datagram to the server and log the echoed response.
+    Send a UDP datagrams to the server and log the echoed response.
 
     Args:
         host (str): Server hostname or IP.
@@ -220,6 +222,7 @@ def udp_send(host, port, message):
         message (str): Message to send.
     """
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_socket.settimeout(CLIENT_TIMEOUT)
     udp_socket.sendto(message.encode(), (host, port))
     logging.info(f"{LOG_CLIENT_OUT_UDP}{message}")
     data, _ = udp_socket.recvfrom(1024)

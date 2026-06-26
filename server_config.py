@@ -25,7 +25,6 @@ IMPORTS
 """
 
 import os
-import logging
 from dotenv import load_dotenv
 
 """
@@ -86,18 +85,4 @@ server_config = {
     "rate_limit_window_seconds": int(os.getenv("ENV_RATE_LIMIT_WINDOW_SECONDS", DEFAULT_RATE_LIMIT_WINDOW_SECONDS))
 }
 
-# create log directory if it does not exist 
-os.makedirs(server_config["log_dir"], exist_ok=True)
-log_file_path = os.path.join(server_config["log_dir"], server_config["log_file"])
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[logging.FileHandler(log_file_path), logging.StreamHandler()]
-                    )
-
-if env_loaded:
-    logging.info(".env file loaded successfully.")
-else:
-    logging.warning("No .env file found. Using defaults.")
-
-for key, value in server_config.items():
-    logging.debug(f"{key}: {value}")
+# Note: logging is configured by server_logging.py when the server starts.
