@@ -16,6 +16,12 @@ Dependencies:
     - logging (standard library)
 """
 
+
+class PayloadValidationError(Exception):
+    """Exception raised when payload validation fails."""
+    pass
+
+
 def validate_payload(data: bytes, max_size: int) -> tuple[bool, str | None, str | None]:
     """
     Validate incoming payload size and encoding.

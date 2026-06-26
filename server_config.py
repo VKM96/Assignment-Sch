@@ -66,12 +66,21 @@ CONFIGURATION SETUP
 # Load environment variables from .env file
 env_loaded = load_dotenv()
 
+def _get_int(key: str, default: int) -> int:
+    val = os.getenv(key)
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        return default
+
 server_config = {
     "host": os.getenv("ENV_HOST", DEFAULT_HOST),
-    "tcp_port": os.getenv("ENV_HOST_TCP_PORT", DEFAULT_HOST_TCP_PORT),
-    "udp_port": os.getenv("ENV_HOST_UDP_PORT", DEFAULT_HOST_UDP_PORT),
-    "tls_port": os.getenv("ENV_HOST_TLS_PORT", DEFAULT_HOST_TLS_PORT),
-    "max_connections": os.getenv("ENV_MAX_NUM_CONNECTIONS", DEFAULT_MAX_NUM_CONNECTIONS),
+    "tcp_port": _get_int("ENV_HOST_TCP_PORT", DEFAULT_HOST_TCP_PORT),
+    "udp_port": _get_int("ENV_HOST_UDP_PORT", DEFAULT_HOST_UDP_PORT),
+    "tls_port": _get_int("ENV_HOST_TLS_PORT", DEFAULT_HOST_TLS_PORT),
+    "max_connections": _get_int("ENV_MAX_NUM_CONNECTIONS", DEFAULT_MAX_NUM_CONNECTIONS),
     "cert_dir": os.getenv("ENV_CERT_DIR", DEFAULT_CERT_DIR),
     "cert_file": os.getenv("ENV_CERT_FILE", DEFAULT_CERT_FILE),
     "key_file": os.getenv("ENV_KEY_FILE", DEFAULT_KEY_FILE),
@@ -79,10 +88,10 @@ server_config = {
     "log_file": os.getenv("ENV_SERVER_LOG_FILE", DEFAULT_LOG_FILE),
     "jwt_secret": os.getenv("ENV_JWT_SECRET", DEFAULT_JWT_SECRET),
     "jwt_algorithm": os.getenv("ENV_JWT_ALGORITHM", DEFAULT_JWT_ALGORITHM),
-    "jwt_expiration": os.getenv("ENV_JWT_EXPIRATION", DEFAULT_JWT_EXPIRATION),
-    "max_payload" : os.getenv("ENV_MAX_PAYLOAD", DEFAULT_MAX_PAYLOAD),
-    "rate_limit_max_messages": int(os.getenv("ENV_RATE_LIMIT_MAX_MESSAGES", DEFAULT_RATE_LIMIT_MAX_MESSAGES)),
-    "rate_limit_window_seconds": int(os.getenv("ENV_RATE_LIMIT_WINDOW_SECONDS", DEFAULT_RATE_LIMIT_WINDOW_SECONDS))
+    "jwt_expiration": _get_int("ENV_JWT_EXPIRATION", DEFAULT_JWT_EXPIRATION),
+    "max_payload" : _get_int("ENV_MAX_PAYLOAD", DEFAULT_MAX_PAYLOAD),
+    "rate_limit_max_messages": _get_int("ENV_RATE_LIMIT_MAX_MESSAGES", DEFAULT_RATE_LIMIT_MAX_MESSAGES),
+    "rate_limit_window_seconds": _get_int("ENV_RATE_LIMIT_WINDOW_SECONDS", DEFAULT_RATE_LIMIT_WINDOW_SECONDS)
 }
 
 # Note: logging is configured by server_logging.py when the server starts.

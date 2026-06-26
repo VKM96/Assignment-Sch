@@ -32,6 +32,11 @@ TODO:
 import time
 
 
+class RateLimitExceededError(Exception):
+    """Exception raised when client exceeds rate limits."""
+    pass
+
+
 class RateLimitStrategy:
     """
     Base class for rate limiting strategies.
@@ -127,46 +132,3 @@ class FixedWindowCounter(RateLimitStrategy):
             self.clients[client_key] = (1, current_window)
             return True
 
-
-class RateLimiter:
-    """
-    Wrapper class for rate limiting strategies.
-    
-    Delegates rate limit checks to a specific strategy implementation.
-    Allows easy swapping between different algorithms without changing
-    client code.
-    
-    Example:
-        # Use fixed window counter
-        limiter = RateLimiter(FixedWindowCounter(max_messages=5, window_seconds=10))
-        
-        # Later, swap to token bucket (when implemented)
-        limiter = RateLimiter(TokenBucket(max_tokens=5, refill_rate=0.5))
-        
-        # Usage stays the same
-        if not limiter.is_allowed("192.168.1.1:12345"):
-            # Handle rate limit exceeded
-    """
-    
-    def __init__(self, strategy: RateLimitStrategy):
-        """
-        Initialize the rate limiter with a specific strategy.
-        
-        Args:
-            strategy (RateLimitStrategy): The rate limiting strategy to use
-        """
-        self.strategy = strategy
-    
-    def is_allowed(self, client_key: str) -> bool:
-        """
-        Check if client is allowed to send a message.
-        
-        Delegates to the underlying strategy's is_allowed() method.
-        
-        Args:
-            client_key (str): Unique identifier for the client
-        
-        Returns:
-            bool: True if allowed, False if rate limit exceeded
-        """
-        return self.strategy.is_allowed(client_key)

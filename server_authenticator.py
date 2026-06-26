@@ -23,6 +23,11 @@ import jwt
 logger = get_logger(__name__)
 
 
+class AuthenticationError(Exception):
+    """Exception raised when client authentication fails."""
+    pass
+
+
 class Authenticator:
     """Base class for authentication strategies."""
 
@@ -51,13 +56,4 @@ class JWTAuthenticator(Authenticator):
             logger.error("Invalid JWT token.")
             return False, None
 
-
-class AuthenticatorService:
-    """Wrapper for swapping authentication mechanisms."""
-
-    def __init__(self, authenticator: Authenticator):
-        self.authenticator = authenticator
-
-    def authenticate(self, token: str) -> tuple[bool, str | None]:
-        return self.authenticator.authenticate(token)
 
