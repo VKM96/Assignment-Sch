@@ -61,7 +61,3 @@ class AuthenticatorService:
     def authenticate(self, token: str) -> tuple[bool, str | None]:
         return self.authenticator.authenticate(token)
 
-
-def verify_jwt_token(token: str, jwt_secret: str, jwt_algorithm: str) -> tuple[bool, str | None]:
-    """Convenience function to preserve legacy verify_jwt_token semantics."""
-    return JWTAuthenticator(jwt_secret, jwt_algorithm).authenticate(token)

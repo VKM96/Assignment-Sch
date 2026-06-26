@@ -20,7 +20,6 @@ Dependencies:
 
 TODO:
 - shutdown strategy needs further refinement 
-- rate limiting is not yet implemented 
 - Unit tests need to be added 
 - Logs do not manage sensitive data differently 
 
@@ -61,10 +60,7 @@ TLS_HANDSHAKE_TIMEOUT_SECONDS = 5
 
 
 class Protocol(Enum):
-    """
-    Enumeration of supported network protocols.
-
-    """
+    """  Enumeration of supported network protocols """
     TCP = "TCP"
     UDP = "UDP"
     TLS = "TLS"
@@ -73,6 +69,7 @@ class EchoServer:
     """Coordinate TCP, UDP, and TLS echo server behavior."""
 
     def __init__(self, config: dict) -> None:
+        configure_logging(config)
         self.config = config
         self.selector = selectors.DefaultSelector()
         self.rate_limiter = RateLimiter(
@@ -316,6 +313,6 @@ class EchoServer:
         self.selector.close()
         logger.info("All sockets closed.")
 
+
 if __name__ == "__main__":
-    configure_logging(server_config)
     EchoServer(server_config).start()
