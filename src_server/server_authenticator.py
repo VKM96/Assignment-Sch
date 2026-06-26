@@ -17,7 +17,7 @@ Usage:
     success, client_id = authenticator.authenticate(token)
 """
 
-from server_logging import get_logger
+from src_server.server_logging import get_logger
 import jwt
 
 logger = get_logger(__name__)

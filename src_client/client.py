@@ -36,8 +36,7 @@ import ssl
 import os
 import jwt
 import time
-from client_config import client_config
-from client_config import CLIENT_VERSION
+from src_client.client_config import client_config, CLIENT_VERSION
 
 """
 ------------------------------------------------------------

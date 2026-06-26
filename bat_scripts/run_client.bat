@@ -12,9 +12,11 @@ REM Check if venv exists
 if not exist "%PYTHON%" (
     echo Virtual environment not found at %PYTHON%
     echo Run: python -m venv .venv
+	pause
     exit /b 1
 )
 
 REM Run client.py through venv
 echo Starting client.py with %PYTHON%
-"%PYTHON%" client.py
+"%PYTHON%" -m src_client.client
+pause

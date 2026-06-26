@@ -25,11 +25,11 @@ def install_requirements(python_path, project_root):
     else:
         print("No requirements.txt found. Skipping dependency install.")
 
-def spawn_process(python_path, script_name):
+def spawn_process(python_path, module_name):
     if platform.system() == "Windows":
-        subprocess.Popen(["start", "cmd", "/k", python_path, script_name], shell=True)
+        subprocess.Popen(["start", "cmd", "/k", python_path, "-m", module_name], shell=True)
     else:
-        subprocess.Popen(["gnome-terminal", "--", python_path, script_name])
+        subprocess.Popen(["gnome-terminal", "--", python_path, "-m", module_name])
 
 def main():
     project_root = os.path.dirname(os.path.abspath(__file__))
@@ -56,14 +56,14 @@ def main():
         choice = input("Select an option: ").strip()
 
         if choice == "1":
-            spawn_process(python_path, "server.py")
+            spawn_process(python_path, "src_server.server")
         elif choice == "2":
-            spawn_process(python_path, "client.py")
+            spawn_process(python_path, "src_client.client")
         elif choice == "3":
             try:
                 count = int(input("How many clients to spawn? "))
                 for _ in range(count):
-                    spawn_process(python_path, "client.py")
+                    spawn_process(python_path, "src_client.client")
             except ValueError:
                 print("Invalid number.")
         elif choice == "4":

@@ -16,12 +16,12 @@ Usage:
 """
 
 import selectors
-from server_config import server_config, SERVER_VERSION
-from server_rate_limiter import FixedWindowCounter, RateLimitExceededError
-from server_payload_validator import validate_payload, PayloadValidationError
-from server_authenticator import JWTAuthenticator
-from server_logging import configure_logging, get_logger
-from server_handlers import Protocol, TCPHandler, UDPHandler, TLSHandler
+from src_server.server_config import server_config, SERVER_VERSION
+from src_server.server_rate_limiter import FixedWindowCounter, RateLimitExceededError
+from src_server.server_payload_validator import validate_payload, PayloadValidationError
+from src_server.server_authenticator import JWTAuthenticator
+from src_server.server_logging import configure_logging, get_logger
+from src_server.server_handlers import Protocol, TCPHandler, UDPHandler, TLSHandler
 
 logger = get_logger(__name__)
 

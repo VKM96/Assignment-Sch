@@ -18,4 +18,5 @@ if not exist "%PYTHON%" (
 
 REM Run server.py through venv
 echo Starting server.py with %PYTHON%
-"%PYTHON%" server.py
+"%PYTHON%" -m src_server.server
+pause
