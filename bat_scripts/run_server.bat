@@ -12,6 +12,7 @@ REM Check if venv exists
 if not exist "%PYTHON%" (
     echo Virtual environment not found at %PYTHON%
     echo Run: python -m venv .venv
+	pause
     exit /b 1
 )
 

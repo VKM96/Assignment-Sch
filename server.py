@@ -41,6 +41,8 @@ import jwt
 from enum import Enum
 from server_config import server_config 
 from server_config import SERVER_VERSION
+from server_rate_limiter import RateLimiter, FixedWindowCounter
+from server_payload_validator import validate_payload
 
 """
 ------------------------------------------------------------
@@ -70,6 +72,14 @@ class Protocol(Enum):
 # Global selector used to multiplex I/O events across TCP, UDP, and TLS sockets
 selector = selectors.DefaultSelector()
 
+# Initialize global rate limiter with FixedWindowCounter strategy
+rate_limiter = RateLimiter(
+    FixedWindowCounter(
+        max_messages=int(server_config["rate_limit_max_messages"]),
+        window_seconds=int(server_config["rate_limit_window_seconds"])
+    )
+)
+
 """
 ------------------------------------------------------------
 HELPER FUNCTIONS
@@ -92,24 +102,6 @@ def verify_jwt_token(token: str, jwt_secret, jwt_algorithm) -> tuple[bool, str |
     except jwt.InvalidTokenError:
         logging.error("Invalid JWT token.")
         return False, None
-    
-def validate_payload(data: bytes, max_size: int) -> tuple[bool, str | None, str | None]:
-    """
-    Validate incoming payload size and encoding.
-    Returns (success, decoded_data, error_reason).
-    """
-    # Reject oversized payloads
-    if len(data) > max_size:
-        reason = (f"Payload too large ({len(data)} bytes)")
-        return False, None, reason
-
-    try:
-        validated_data = data.decode("utf-8")
-    except UnicodeDecodeError:
-        reason = (f"Malformed/binary payload rejected")
-        return False, None, reason
-
-    return True, validated_data, None
 
 def socket_close(client_socket, proto: Protocol, address = "unknown"):
     """Safely close sockets without crashing.
@@ -154,11 +146,27 @@ def common_data_handler(proto: Protocol, client_socket, data, address):
 
     Args:
         proto (Protocol): Protocol type (TCP, UDP, TLS).
-        client_socket: Socket object (stream or datagram).
+        client_socket: Socket object (stream or datagrams).
         data (bytes): Raw data received from client.
         address (tuple): Client (ip, port).
     """
-    #todo Rate-limit check should go here
+    # Convert address tuple to string key for rate limiting
+    client_key = f"{address[0]}:{address[1]}"
+    
+    # Rate limit check (before payload validation for efficiency)
+    if not rate_limiter.is_allowed(client_key):
+        logging.warning(f"{proto.value} : {address} : Rate limit exceeded (max {server_config['rate_limit_max_messages']} messages per {server_config['rate_limit_window_seconds']} seconds)")
+        
+        if proto == Protocol.UDP:
+            return
+        else:
+            try:
+                client_socket.sendall(f"{SERVER_ERROR_RESPONSE}: Rate limit exceeded\n".encode())
+            except Exception:
+                pass
+            socket_close(client_socket, proto, address)
+        return
+    
     Is_valid_data, validated_data, reason = validate_payload(data, int(server_config["max_payload"]))
 
     if not Is_valid_data:

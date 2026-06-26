@@ -35,12 +35,12 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 4. Environment variables are taken from same .env as server for demonstration. This needs to be separated since all client log to the same file now. This is known issue
 5. tcp_tls ensures tls handshake is complete, and the auth token validated right at the point of connection.
 6. Auth token is derived based on client_id unique to the client (settable) and .env based JWT_secret and JWT_algorithm
-7. tcp and udp connections do not have any auth mechanism. plain tcp needs to be removed, auth needs to be incorporated into udp as well 
+7. tcp and udp connections do not have any auth mechanism. plain tcp needs to be removed, auth needs to be incorporated into udp as well
 8. Linux-Integration is yet to be done
 
 ## Project-structure
 
-1. All source files are in the root directory 
+1. All source files are in the root directory
 2. server.py and server_config.py together with .env make up the server
 3. client.py and client_config.py together with .env make up the client
 4. root folder also contains setup_env.py for setting up project environment
@@ -52,7 +52,7 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 
 ## Code-flow
 
-1. To be documented with illustration 
+1. To be documented with illustration
 
 ## Build-Instruction
 
@@ -77,7 +77,7 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 - Authentication is built on the client end using JSON Web Tokens(JWT)
 - JwT secret, algorithm and expirations are stored as environment variables
 - Each client is associated with a client_ID which can be set at runtime  
-- The client creates a JWT encoded token using the client_id and the expiration time as payload 
+- The client creates a JWT encoded token using the client_id and the expiration time as payload
 - AUTH \<token\> is the first message shared by client when communicating over tls
 - The server uses the same JW secret and algorithm to decode the upcoming AUTH token to authenticate the client
 
@@ -87,7 +87,7 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 
 ## Docs
 
-1. pdf docs yet to be generated 
+1. pdf docs yet to be generated
 
 ## Contact-Me
 

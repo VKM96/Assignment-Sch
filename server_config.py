@@ -55,6 +55,9 @@ DEFAULT_JWT_EXPIRATION = 3600  # 1 hour
 
 DEFAULT_MAX_PAYLOAD = 4096 # 4KB size limit
 
+DEFAULT_RATE_LIMIT_MAX_MESSAGES = 5
+DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 10
+
 """
 ------------------------------------------------------------
 CONFIGURATION SETUP
@@ -78,7 +81,9 @@ server_config = {
     "jwt_secret": os.getenv("ENV_JWT_SECRET", DEFAULT_JWT_SECRET),
     "jwt_algorithm": os.getenv("ENV_JWT_ALGORITHM", DEFAULT_JWT_ALGORITHM),
     "jwt_expiration": os.getenv("ENV_JWT_EXPIRATION", DEFAULT_JWT_EXPIRATION),
-    "max_payload" : os.getenv("ENV_MAX_PAYLOAD", DEFAULT_MAX_PAYLOAD)
+    "max_payload" : os.getenv("ENV_MAX_PAYLOAD", DEFAULT_MAX_PAYLOAD),
+    "rate_limit_max_messages": int(os.getenv("ENV_RATE_LIMIT_MAX_MESSAGES", DEFAULT_RATE_LIMIT_MAX_MESSAGES)),
+    "rate_limit_window_seconds": int(os.getenv("ENV_RATE_LIMIT_WINDOW_SECONDS", DEFAULT_RATE_LIMIT_WINDOW_SECONDS))
 }
 
 # create log directory if it does not exist 
