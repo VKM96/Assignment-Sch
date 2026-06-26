@@ -37,12 +37,12 @@ import socket
 import logging
 import ssl
 import os
-import jwt
 from enum import Enum
 from server_config import server_config 
 from server_config import SERVER_VERSION
 from server_rate_limiter import RateLimiter, FixedWindowCounter
 from server_payload_validator import validate_payload
+from server_authenticator import AuthenticatorService, JWTAuthenticator
 
 """
 ------------------------------------------------------------
@@ -80,28 +80,19 @@ rate_limiter = RateLimiter(
     )
 )
 
+# Initialize authentication service with JWT strategy
+authenticator = AuthenticatorService(
+    JWTAuthenticator(
+        jwt_secret=server_config["jwt_secret"],
+        jwt_algorithm=server_config["jwt_algorithm"]
+    )
+)
+
 """
 ------------------------------------------------------------
 HELPER FUNCTIONS
 ------------------------------------------------------------
 """
-
-def verify_jwt_token(token: str, jwt_secret, jwt_algorithm) -> tuple[bool, str | None]:
-    """
-    Verify the JWT token and return (success, client_id).
-    success = True if valid, False otherwise.
-    client_id = extracted client_id claim if valid, None otherwise.
-    """
-    try:
-        decoded_token = jwt.decode(token, jwt_secret, algorithms=[jwt_algorithm])
-        client_id = decoded_token.get("client_id", "unknown")
-        return True, client_id
-    except jwt.ExpiredSignatureError:
-        logging.error("JWT token has expired.")
-        return False, None
-    except jwt.InvalidTokenError:
-        logging.error("Invalid JWT token.")
-        return False, None
 
 def socket_close(client_socket, proto: Protocol, address = "unknown"):
     """Safely close sockets without crashing.
@@ -290,7 +281,7 @@ def tls_connection_handler(tcp_socket, context):
             return
 
         token = auth_message[len(CLIENT_AUTH_TOKEN_PREFIX):].strip()
-        is_success, client_id = verify_jwt_token(token, server_config["jwt_secret"], server_config["jwt_algorithm"])
+        is_success, client_id = authenticator.authenticate(token)
         if not is_success:
             logging.error(f"Authentication failed with {address}: Invalid JWT token")
             socket_close(connection, Protocol.TLS, address)
