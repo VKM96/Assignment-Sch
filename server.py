@@ -62,327 +62,253 @@ class Protocol(Enum):
     """
     Enumeration of supported network protocols.
 
-    Members:
-        TCP (str): TCP
-        UDP (str): UDP
-        TLS (str): TCP over TLS
     """
     TCP = "TCP"
     UDP = "UDP"
     TLS = "TLS"
 
-# Global selector used to multiplex I/O events across TCP, UDP, and TLS sockets
-selector = selectors.DefaultSelector()
+class EchoServer:
+    """Coordinate TCP, UDP, and TLS echo server behavior."""
 
-# Initialize global rate limiter with FixedWindowCounter strategy
-rate_limiter = RateLimiter(
-    FixedWindowCounter(
-        max_messages=int(server_config["rate_limit_max_messages"]),
-        window_seconds=int(server_config["rate_limit_window_seconds"])
-    )
-)
+    def __init__(self, config: dict) -> None:
+        self.config = config
+        self.selector = selectors.DefaultSelector()
+        self.rate_limiter = RateLimiter(
+            FixedWindowCounter(
+                max_messages=int(self.config["rate_limit_max_messages"]),
+                window_seconds=int(self.config["rate_limit_window_seconds"]),
+            )
+        )
+        self.authenticator = AuthenticatorService(
+            JWTAuthenticator(
+                jwt_secret=self.config["jwt_secret"],
+                jwt_algorithm=self.config["jwt_algorithm"],
+            )
+        )
+        self._sockets = []
 
-# Initialize authentication service with JWT strategy
-authenticator = AuthenticatorService(
-    JWTAuthenticator(
-        jwt_secret=server_config["jwt_secret"],
-        jwt_algorithm=server_config["jwt_algorithm"]
-    )
-)
+    def _close_socket(self, client_socket, proto: Protocol, address: str = "unknown") -> None:
+        """Safely close a client socket and unregister it from the selector."""
+        try:
+            self.selector.unregister(client_socket)
+        except Exception:
+            pass
+        try:
+            client_socket.close()
+        except Exception:
+            pass
+        logger.info(f"Closed {proto.value} connection with {address}")
 
-"""
-------------------------------------------------------------
-HELPER FUNCTIONS
-------------------------------------------------------------
-"""
-
-def socket_close(client_socket, proto: Protocol, address = "unknown"):
-    """Safely close sockets without crashing.
-
-    Unregisters the socket from the selector and closes it if not closed already
-    """
-    try:
-        selector.unregister(client_socket)
-    except Exception:
-        pass
-    try:
-        client_socket.close()
-    except Exception:
-        pass
-    logger.info(f"Closed {proto.value} connection with {address}")
-
-
-def stream_data_handler(client_socket, proto: Protocol, address):
-    """
-    Handle incoming data for stream-based protocols (TCP/TLS).
-
-    Args:
-        client_socket: The socket object for the client connection.
-        proto (Protocol): Protocol type (TCP or TLS).
-        address (tuple): Client address (IP, port).
-    """
-
-    try:
-        data = client_socket.recv(SERVER_NW_BUF_SIZE)
-        if data:
-            common_data_handler(proto, client_socket, data, address)
-        else:
-            logger.info(f"!{address} disconnected")
-            socket_close(client_socket, proto, address)
-    except Exception as e:
-        logger.error(f"{proto.value} error with {address}: {e}")
-        socket_close(client_socket, proto, address)
-
-def common_data_handler(proto: Protocol, client_socket, data, address):
-    """
-    Handle incoming data for TCP, UDP, or TLS connections.
-
-    Args:
-        proto (Protocol): Protocol type (TCP, UDP, TLS).
-        client_socket: Socket object (stream or datagrams).
-        data (bytes): Raw data received from client.
-        address (tuple): Client (ip, port).
-    """
-    # Convert address tuple to string key for rate limiting
-    client_key = f"{address[0]}:{address[1]}"
-    
-    # Rate limit check (before payload validation for efficiency)
-    if not rate_limiter.is_allowed(client_key):
-        logger.warning(f"{proto.value} : {address} : Rate limit exceeded (max {server_config['rate_limit_max_messages']} messages per {server_config['rate_limit_window_seconds']} seconds)")
-        
+    def _send_error(self, client_socket, proto: Protocol, message: str, address) -> None:
+        """Send an error response for stream-based protocols and close the connection."""
         if proto == Protocol.UDP:
             return
-        else:
-            try:
-                client_socket.sendall(f"{SERVER_ERROR_RESPONSE}: Rate limit exceeded\n".encode())
-            except Exception:
-                pass
-            socket_close(client_socket, proto, address)
-        return
-    
-    Is_valid_data, validated_data, reason = validate_payload(data, int(server_config["max_payload"]))
+        try:
+            client_socket.sendall(f"{SERVER_ERROR_RESPONSE}: {message}\n".encode())
+        except Exception:
+            pass
+        self._close_socket(client_socket, proto, address)
 
-    if not Is_valid_data:
-        logger.warning(f"{proto.value} : {address} : {reason}")
+    def _handle_stream_data(self, client_socket, proto: Protocol, address) -> None:
+        """Handle incoming data for TCP or TLS connections."""
+        try:
+            data = client_socket.recv(SERVER_NW_BUF_SIZE)
+            if data:
+                self._handle_message(proto, client_socket, data, address)
+            else:
+                logger.info(f"!{address} disconnected")
+                self._close_socket(client_socket, proto, address)
+        except Exception as exc:
+            logger.error(f"{proto.value} error with {address}: {exc}")
+            self._close_socket(client_socket, proto, address)
+
+    def _handle_message(self, proto: Protocol, client_socket, data: bytes, address) -> None:
+        """Validate, log, and echo incoming payloads."""
+        client_key = f"{address[0]}:{address[1]}"
+
+        if not self.rate_limiter.is_allowed(client_key):
+            logger.warning(
+                f"{proto.value} : {address} : Rate limit exceeded "
+                f"(max {self.config['rate_limit_max_messages']} messages per "
+                f"{self.config['rate_limit_window_seconds']} seconds)"
+            )
+            if proto != Protocol.UDP:
+                self._send_error(client_socket, proto, "Rate limit exceeded", address)
+            return
+
+        is_valid_data, validated_data, reason = validate_payload(data, int(self.config["max_payload"]))
+        if not is_valid_data:
+            logger.warning(f"{proto.value} : {address} : {reason}")
+            if proto != Protocol.UDP:
+                self._send_error(client_socket, proto, reason, address)
+            return
+
+        logger.info(f"<< {proto.value} << {address}: {validated_data}")
 
         if proto == Protocol.UDP:
-            return
+            client_socket.sendto(data, address)
         else:
-            try:
-                client_socket.sendall(f"{SERVER_ERROR_RESPONSE}: {reason}\n".encode())
-            except Exception:
-                pass
-            socket_close(client_socket, proto, address)
-        return
+            client_socket.sendall(data)
 
-    logger.info(f"<< {proto.value} << {address}: {validated_data}")
+    def _setup_tcp_server(self, host: str, port: int, max_connections: int) -> socket.socket:
+        """Create and register the TCP listening socket."""
+        tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tcp_socket.bind((host, port))
+        tcp_socket.listen(max_connections)
+        tcp_socket.setblocking(False)
 
-    if proto == Protocol.UDP:
-        client_socket.sendto(data, address)
-    else:
-        client_socket.sendall(data)
+        self._sockets.append(tcp_socket)
+        self.selector.register(
+            tcp_socket,
+            selectors.EVENT_READ,
+            lambda sock: self._handle_tcp_accept(sock),
+        )
+        logger.info(f"TCP Server listening on {host}:{port}")
+        return tcp_socket
 
-
-"""
-------------------------------------------------------------
-
-TCP
-------------------------------------------------------------
-"""
-
-def tcp_server_start(host, port, max_connections):
-    """
-    Initialize and start a TCP server.
-
-    Args:
-        host (str): IP address to bind the server.
-        port (int): Port number for TCP connections.
-        max_connections (int): Maximum number of simultaneous clients.
-
-    Returns:
-        socket: The listening TCP socket.
-    """
-    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp_socket.bind((host, port))
-    tcp_socket.listen(max_connections)
-    tcp_socket.setblocking(False)
-
-    selector.register(tcp_socket, selectors.EVENT_READ, tcp_connection_handler)
-    logger.info(f"TCP Server listening on {host}:{port}")
-    return tcp_socket
-
-def tcp_connection_handler(tcp_socket):
-    """
-    Accept a new TCP client connection and register it with the selector.
-
-    Args:
-        tcp_socket: The listening TCP socket.
-    """
-    connection, address = tcp_socket.accept()
-    connection.setblocking(False)
-
-    selector.register(connection, selectors.EVENT_READ, lambda sock: stream_data_handler(sock, Protocol.TCP, address))
-    logger.info(f"TCP Connection from {address}")
-
-"""
-------------------------------------------------------------
-TLS
-------------------------------------------------------------
-"""
-
-def tls_server_start(host, port, max_connections, tls_cert_path, tls_key_path):
-    """
-    Initialize and start a TLS-secured server.
-
-    Args:
-        host (str): IP address to bind the server.
-        port (int): Port number for TLS connections.
-        max_connections (int): Maximum number of simultaneous clients.
-        tls_cert_path (str): Path to TLS certificate file.
-        tls_key_path (str): Path to TLS private key file.
-
-    Returns:
-        socket: The listening TLS socket.
-    """
-    tls_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tls_socket.bind((host, port))
-    tls_socket.listen(max_connections)
-    tls_socket.setblocking(False) # Non-blocking mode for selector
-
-   # Configure TLS context with certificate and key
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    os.makedirs(server_config["cert_dir"], exist_ok=True)
-    context.load_cert_chain(certfile=tls_cert_path, keyfile=tls_key_path)
-
-    # wrap the TCP socket with SSL context and register it with the selector
-    selector.register(tls_socket, selectors.EVENT_READ, lambda sock: tls_connection_handler(sock, context))
-    logger.info(f"TLS Server listening on {host}:{port}")
-    return tls_socket
-
-def tls_connection_handler(tcp_socket, context):
-    """
-    Accept and authenticate a new TLS client connection.
-
-    Args:
-        tcp_socket: The listening TLS socket.
-        context: SSL context configured with server cert/key.
-    """
-    connection, address = tcp_socket.accept()
-    try:
-        # Perform TLS handshake
-        connection = context.wrap_socket(connection, server_side=True)
-        logger.info(f"TLS Connection from {address}")
-
-        # Perform authentication by expecting an "AUTH <token>" message from the client
-        auth_message = connection.recv(512).decode().strip()
-        logger.info(f"TLS<< {auth_message}")
-
-        if not auth_message.startswith(CLIENT_AUTH_TOKEN_PREFIX):
-            logger.error(f"Authentication failed with {address}: No AUTH message received")
-            socket_close(connection, Protocol.TLS, address)
-            return
-
-        token = auth_message[len(CLIENT_AUTH_TOKEN_PREFIX):].strip()
-        is_success, client_id = authenticator.authenticate(token)
-        if not is_success:
-            logger.error(f"Authentication failed with {address}: Invalid JWT token")
-            socket_close(connection, Protocol.TLS, address)
-            return
-        logger.info(f"TLS client {client_id} authenticated from {address}")
-        
-        # Send success response and register for data handling
-        logger.info(f"TLS>> {SERVER_AUTH_OK_RESPONSE}")
-        connection.sendall(SERVER_AUTH_OK_RESPONSE.encode())
+    def _handle_tcp_accept(self, listening_socket) -> None:
+        """Accept a new TCP connection and register it for reading."""
+        connection, address = listening_socket.accept()
         connection.setblocking(False)
-        selector.register(connection, selectors.EVENT_READ, lambda sock: stream_data_handler(sock, Protocol.TLS, address))
+        self.selector.register(
+            connection,
+            selectors.EVENT_READ,
+            lambda sock: self._handle_stream_data(sock, Protocol.TCP, address),
+        )
+        logger.info(f"TCP Connection from {address}")
 
-    except ssl.SSLError as e:
-        logger.error(f"TLS handshake failed with {address}: {e}")
-        socket_close(connection, Protocol.TLS, address)
+    def _setup_udp_server(self, host: str, port: int) -> socket.socket:
+        """Create and register the UDP socket."""
+        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_socket.bind((host, port))
+        udp_socket.setblocking(False)
 
-"""
-------------------------------------------------------------
-UDP
-------------------------------------------------------------
-"""
+        self._sockets.append(udp_socket)
+        self.selector.register(
+            udp_socket,
+            selectors.EVENT_READ,
+            lambda sock: self._handle_udp_data(sock),
+        )
+        logger.info(f"UDP Server listening on {host}:{port}")
+        return udp_socket
 
-def udp_server_start(host, port):
-    """
-    Initialize and start a UDP server.
+    def _handle_udp_data(self, udp_socket) -> None:
+        """Handle incoming UDP datagrams."""
+        try:
+            data, address = udp_socket.recvfrom(SERVER_NW_BUF_SIZE)
+            self._handle_message(Protocol.UDP, udp_socket, data, address)
+        except Exception as exc:
+            logger.error(f"UDP error: {exc}")
+            self._close_socket(udp_socket, Protocol.UDP, "<unknown>")
 
-    Args:
-        host (str): IP address to bind the server.
-        port (int): Port number for UDP connections.
+    def _setup_tls_server(self, host: str, port: int, max_connections: int, tls_cert_path: str, tls_key_path: str) -> socket.socket:
+        """Create and register the TLS listening socket."""
+        tls_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tls_socket.bind((host, port))
+        tls_socket.listen(max_connections)
+        tls_socket.setblocking(False)
 
-    Returns:
-        socket: The listening UDP socket.
-    """
-    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_socket.bind((host, port))
-    udp_socket.setblocking(False)
-    selector.register(udp_socket, selectors.EVENT_READ, udp_connection_handler)
-    logger.info(f"UDP Server listening on {host}:{port}")
-    return udp_socket
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        os.makedirs(self.config["cert_dir"], exist_ok=True)
+        context.load_cert_chain(certfile=tls_cert_path, keyfile=tls_key_path)
 
-def udp_connection_handler(udp_socket):
-    """
-    Handle incoming UDP datagrams.
+        self._sockets.append(tls_socket)
+        self.selector.register(
+            tls_socket,
+            selectors.EVENT_READ,
+            lambda sock: self._handle_tls_accept(sock, context),
+        )
+        logger.info(f"TLS Server listening on {host}:{port}")
+        return tls_socket
 
-    Args:
-        udp_socket: The bound UDP socket.
-    """
-    try:
-        data, address = udp_socket.recvfrom(SERVER_NW_BUF_SIZE)
-        common_data_handler(Protocol.UDP, udp_socket, data, address)
-    except Exception as e:
-        socket_close(udp_socket, Protocol.UDP, "<unknown>")
+    def _handle_tls_accept(self, listening_socket, context) -> None:
+        """Accept a TLS connection, authenticate it, and register it for data handling."""
+        connection, address = listening_socket.accept()
+        try:
+            connection = context.wrap_socket(connection, server_side=True)
+            logger.info(f"TLS Connection from {address}")
 
+            auth_message = connection.recv(512).decode().strip()
+            logger.info(f"TLS<< {auth_message}")
 
-"""
-------------------------------------------------------------
-CORE IMPLEMENTATION
-------------------------------------------------------------
-"""
+            if not auth_message.startswith(CLIENT_AUTH_TOKEN_PREFIX):
+                logger.error(f"Authentication failed with {address}: No AUTH message received")
+                self._close_socket(connection, Protocol.TLS, address)
+                return
 
-def tcp_udp_server(server_config):
-    """
-    Start TCP, UDP, and TLS servers and run the main selector loop.
+            token = auth_message[len(CLIENT_AUTH_TOKEN_PREFIX) :].strip()
+            is_success, client_id = self.authenticator.authenticate(token)
+            if not is_success:
+                logger.error(f"Authentication failed with {address}: Invalid JWT token")
+                self._close_socket(connection, Protocol.TLS, address)
+                return
 
-    Args:
-        server_config (dict): Configuration dictionary with host, ports,
-                              cert paths, and connection limits.
-    """
-    # Extract configuration values
-    host = server_config["host"]
-    tcp_port = int(server_config["tcp_port"])
-    udp_port = int(server_config["udp_port"])
-    tls_port = int(server_config["tls_port"])
-    tls_cert_path = os.path.join(server_config["cert_dir"], server_config["cert_file"])
-    tls_key_path = os.path.join(server_config["cert_dir"], server_config["key_file"])
-    max_connections = int(server_config["max_connections"])
+            logger.info(f"TLS client {client_id} authenticated from {address}")
+            logger.info(f"TLS>> {SERVER_AUTH_OK_RESPONSE}")
+            connection.sendall(SERVER_AUTH_OK_RESPONSE.encode())
+            connection.setblocking(False)
+            self.selector.register(
+                connection,
+                selectors.EVENT_READ,
+                lambda sock: self._handle_stream_data(sock, Protocol.TLS, address),
+            )
+        except ssl.SSLError as exc:
+            logger.error(f"TLS handshake failed with {address}: {exc}")
+            self._close_socket(connection, Protocol.TLS, address)
+        except Exception as exc:
+            logger.error(f"TLS connection error with {address}: {exc}")
+            self._close_socket(connection, Protocol.TLS, address)
 
-    # Initialize servers for each protocol
-    tcp_server_start(host, tcp_port, max_connections)     # TCP Socket    
-    udp_server_start(host, udp_port)     # UDP Socket
-    tls_server_start(host, tls_port, max_connections, tls_cert_path, tls_key_path)  # TLS Socket
+    def start(self) -> None:
+        """Initialize all listener sockets and run the main event loop."""
+        host = self.config["host"]
+        tcp_port = int(self.config["tcp_port"])
+        udp_port = int(self.config["udp_port"])
+        tls_port = int(self.config["tls_port"])
+        tls_cert_path = os.path.join(self.config["cert_dir"], self.config["cert_file"])
+        tls_key_path = os.path.join(self.config["cert_dir"], self.config["key_file"])
+        max_connections = int(self.config["max_connections"])
 
-    logger.info(f"Starting Server v{SERVER_VERSION}, waiting for connections. Press CTRL+C to stop")
+        self._setup_tcp_server(host, tcp_port, max_connections)
+        self._setup_udp_server(host, udp_port)
+        self._setup_tls_server(host, tls_port, max_connections, tls_cert_path, tls_key_path)
 
-    try:
-        # Main event loop: wait for socket events and dispatch handlers
-        while True:
-            events = selector.select(timeout=1) 
-            for key, mask in events:
-                callback = key.data
-                callback(key.fileobj)   
-    except KeyboardInterrupt:
-        #TODO Better shutdown mechanism to be devised
-        logger.info("Exit Signal received. Server is shutting down.")
-    finally:
-        # Cleanup selector and sockets
-        selector.close()
+        logger.info(f"Starting Server v{SERVER_VERSION}, waiting for connections. Press CTRL+C to stop")
+        self.run()
+
+    def run(self) -> None:
+        """Run the main selector loop until interrupted."""
+        try:
+            while True:
+                events = self.selector.select(timeout=1)
+                for key, _ in events:
+                    callback = key.data
+                    callback(key.fileobj)
+        except KeyboardInterrupt:
+            logger.info("Exit Signal received. Server is shutting down.")
+        finally:
+            self.shutdown()
+
+    def shutdown(self) -> None:
+        """Close all registered sockets and the selector."""
+        for sock in list(self._sockets):
+            try:
+                self.selector.unregister(sock)
+            except Exception:
+                pass
+            try:
+                sock.close()
+            except Exception:
+                pass
+        self.selector.close()
         logger.info("All sockets closed.")
+
+
+
+
+
+
 
 if __name__ == "__main__":
     configure_logging(server_config)
-    tcp_udp_server(server_config)
+    EchoServer(server_config).start()
