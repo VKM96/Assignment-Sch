@@ -1,0 +1,10 @@
+[Unit]
+Description=MyApp Echo Server 
+
+[Service]
+WorkingDirectory=/opt/myapp
+ExecStartPre=/opt/myapp/setup.sh --init
+ExecStart=/opt/myapp/.venv/bin/python -m src_server.server
+
+[Install]
+WantedBy=multi-user.target
