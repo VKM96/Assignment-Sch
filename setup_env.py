@@ -1,14 +1,7 @@
-# setup_env.py
 import os
 import sys
 import subprocess
 import platform
-
-def get_python_path(venv_dir):
-    if platform.system() == "Windows":
-        return os.path.join(venv_dir, "Scripts", "python.exe")
-    else:
-        return os.path.join(venv_dir, "bin", "python")
 
 def create_venv(project_root, venv_dir):
     if not os.path.exists(venv_dir):
@@ -25,56 +18,62 @@ def install_requirements(python_path, project_root):
     else:
         print("No requirements.txt found. Skipping dependency install.")
 
-def spawn_process(python_path, module_name):
-    if platform.system() == "Windows":
-        subprocess.Popen(["start", "cmd", "/k", python_path, "-m", module_name], shell=True)
+def spawn_process(script_path):
+    system = platform.system()
+    if system == "Windows":
+        # Launch in a new Command Prompt window
+        subprocess.Popen(["start", "cmd", "/k", script_path], shell=True)
+    elif system == "Linux":
+        # Launch in a new gnome-terminal window (adjust if using xterm/konsole)
+        subprocess.Popen(["gnome-terminal", "--", "bash", script_path])
+    elif system == "Darwin":  # macOS
+        # Launch in a new Terminal window via AppleScript
+        subprocess.Popen([
+            "osascript", "-e",
+            f'tell app "Terminal" to do script "bash {script_path}"'
+        ])
     else:
-        subprocess.Popen(["gnome-terminal", "--", python_path, "-m", module_name])
+        # Fallback: run in current terminal
+        subprocess.Popen(["bash", script_path])
 
 def main():
     project_root = os.path.dirname(os.path.abspath(__file__))
     venv_dir = os.path.join(project_root, ".venv")
 
     create_venv(project_root, venv_dir)
-    python_path = get_python_path(venv_dir)
 
+    python_path = os.path.join(venv_dir, "Scripts", "python.exe") if os.name == "nt" else os.path.join(venv_dir, "bin", "python")
     if not os.path.exists(python_path):
         print(f"Virtual environment not found at {python_path}")
-        print("Run: python -m venv .venv")
         sys.exit(1)
 
     install_requirements(python_path, project_root)
+
+    # Pre-resolve script paths inside bat_scripts/
+    server_script = os.path.join(project_root, "bat_scripts", "run_server.bat" if os.name == "nt" else "run_server.sh")
+    client_script = os.path.join(project_root, "bat_scripts", "run_client.bat" if os.name == "nt" else "run_client.sh")
 
     while True:
         print("\n=== Launcher Menu ===")
         print("1. Spawn Server")
         print("2. Spawn Client")
-        print("3. Spawn Multiple Clients")
-        print("4. Generate Certificates")
-        print("5. Exit")
+        print("3. Generate Certificates")
+        print("4. Exit")
 
         choice = input("Select an option: ").strip()
 
         if choice == "1":
-            spawn_process(python_path, "src_server.server")
+            spawn_process(server_script)
         elif choice == "2":
-            spawn_process(python_path, "src_client.client")
+            spawn_process(client_script)
         elif choice == "3":
-            try:
-                count = int(input("How many clients to spawn? "))
-                for _ in range(count):
-                    spawn_process(python_path, "src_client.client")
-            except ValueError:
-                print("Invalid number.")
-        elif choice == "4":
-            # Run gen_cert.py inside certs folder
             certs_dir = os.path.join(project_root, "certs")
             gen_cert_script = os.path.join(certs_dir, "gen_cert.py")
             if os.path.exists(gen_cert_script):
                 subprocess.run([python_path, gen_cert_script])
             else:
                 print("gen_cert.py not found in certs folder.")
-        elif choice == "5":
+        elif choice == "4":
             print("Exiting launcher.")
             break
         else:
