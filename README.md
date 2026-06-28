@@ -1,6 +1,6 @@
 # tcp/udp echo server and client {#mainpage}
 
-This repository contains Source Code for a simple tcp/udp echo sever and client [Github-link](https://github.com/VKM96/Assignment-Sch)
+This repository contains Source Code for a simple tcp/udp echo sever and client [myapp.git](https://github.com/VKM96/myapp.git)
 The requirements are based on the assignment questions here [Assignment](Docs/Assignment_Edge.pdf)
 
 ## Table of contents
@@ -142,7 +142,7 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 
 ## Docs
 
-1. pdf docs yet to be generated
+1. Architecture document: [Architecture](Docs/Architecture.pdf)
 
 ## Demo
 
