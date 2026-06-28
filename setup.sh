@@ -41,8 +41,8 @@ function launcher_menu() {
         read -rp "Choose an option: " choice
 
         case $choice in
-            1) "$VENV_DIR/bin/python" -m sec_server.server ;;
-            2) "$VENV_DIR/bin/python" -m client ;;
+            1) "$VENV_DIR/bin/python" -m src_server.server ;;
+            2) "$VENV_DIR/bin/python" -m src_client.client ;;
             3) "$VENV_DIR/bin/python" certs/gen_cert.py ;;
             4) echo "Exiting..."; break ;;
             *) echo "Invalid choice" ;;
