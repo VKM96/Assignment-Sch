@@ -1,4 +1,4 @@
-# tcp/udp client and server submission {#mainpage}
+# tcp/udp echo server and client {#mainpage}
 
 This repository contains Source Code for a simple tcp/udp echo sever and client [Github-link](https://github.com/VKM96/Assignment-Sch)
 The requirements are based on the assignment questions here [Assignment](Docs/Assignment_Edge.pdf)
@@ -10,6 +10,7 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 - [Code-flow](#code-flow)
 - [Build-Instruction](#build-instruction)
 - [Documentation](#docs)
+- [Demo](#demo)
 - [Contact-Me](#contact-me)
 
 ## Context
@@ -37,7 +38,24 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 6. Auth token is derived based on client_id unique to the client (settable) and .env based JWT_secret and JWT_algorithm
 7. tcp and udp connections do not have any auth mechanism. plain tcp needs to be removed, auth needs to be incorporated into udp as well
 
+![logs](Docs/Assets/logs.png)
+
 ## Project-structure
+
+```text
+
++---.venv
++---archive
++---bat_scripts
++---certs
++---demo
++---docs
++---logs
++---misc
++---src_client
++---src_server
+
+```
 
 1. All source files for server are under `myapp/src_src/`, client under `myapp/src_client/`. They are developed as independent modules
 2. Both modules contain `.env` inside their respective folders for environment variables
@@ -71,6 +89,8 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 - Sets up and activates the virtual environment
 - Installs required packages though `requirements.txt`
 
+![setup.sh --init](Docs/Assets/setup_init.png)
+
 #### Run server
 
 - If Installed as a service `systemctl start myapp.service` to start, `systemctl stop myapp.service` to stop
@@ -78,17 +98,23 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 - `.\run_server.sh` inside `bat_scripts` folder can also run the server
 - `python -m src_server.server` is the direct way to invoke the server, assuming all dependencies from `requirements.txt` are met
 
+![systemctl](Docs/Assets/systemctl.png)
+
 #### Run client
 
 - `.\setup.sh --menu` launches a CLI, select option-2 to launch client
 - `.\run_client.sh` inside `bat_scripts` folder can also run the client
 - `python -m src_client.client` is the direct way to invoke the server, assuming all dependencies from `requirements.txt` are met
 
+![client](Docs/Assets/client.png)
+
 ### How to generate TLS certificates
 
 - `.\setup.sh --menu` launches a CLI, select option-2 to launch client
 - It invokes `python gen_cert.py` in the certs folder
 - Internally openssl with file openssl.cnf inside certs folder is used `openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout server.key -out server.crt -config openssl.cnf`
+
+![client](Docs/Assets/Certificate_Generation.png)
 
 ### How authentication works
 
@@ -112,9 +138,16 @@ The requirements are based on the assignment questions here [Assignment](Docs/As
 - ports are checked by `grep` for required ports on the output of `ss`
 - file permissions are checked using `stat`
 
+![securecheck](Docs/Assets/secure_check.png)
+
 ## Docs
 
 1. pdf docs yet to be generated
+
+## Demo
+
+1. [Linux-Demo](demo/App_Demo_Linux.webm)
+1. [App-Demo-Detailed](demo/App_Demo.mp4)
 
 ## Contact-Me
 
